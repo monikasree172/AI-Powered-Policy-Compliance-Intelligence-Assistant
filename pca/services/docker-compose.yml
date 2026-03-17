@@ -1,0 +1,112 @@
+version: "3.8"
+
+services:
+
+  retrieval:
+    build:
+      context: .
+      dockerfile: services/retrieval/Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./services/retrieval/logs:/app/logs
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  interpretation:
+    build:
+      context: .
+      dockerfile: services/interpretation/Dockerfile
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./services/interpretation/logs:/app/logs
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  compliance:
+    build:
+      context: .
+      dockerfile: services/compliance/Dockerfile
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./services/compliance/logs:/app/logs
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  risk:
+    build:
+      context: .
+      dockerfile: services/risk/Dockerfile
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./services/risk/logs:/app/logs
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  recommendation:
+    build:
+      context: .
+      dockerfile: services/recommendation/Dockerfile
+    ports:
+      - "8005:8005"
+    volumes:
+      - ./services/recommendation/logs:/app/logs
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./services/gateway/logs:/app/logs
+    env_file: .env
+    environment:
+      - RETRIEVAL_URL=http://retrieval:8001
+      - INTERPRETATION_URL=http://interpretation:8002
+      - COMPLIANCE_URL=http://compliance:8003
+      - RISK_URL=http://risk:8004
+      - RECOMMENDATION_URL=http://recommendation:8005
+    depends_on:
+      - retrieval
+      - interpretation
+      - compliance
+      - risk
+      - recommendation
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
