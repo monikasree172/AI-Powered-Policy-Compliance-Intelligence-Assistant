@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar.jsx";
 import ChatArea from "./components/ChatArea.jsx";
 import InputBar from "./components/InputBar.jsx";
 import AnalyticsModal from "./components/AnalyticsModal.jsx";
+import ChatHistoryModal from "./components/ChatHistoryModal.jsx";
 import "./App.css";
 
 const AGENTS = [
@@ -14,13 +15,35 @@ const AGENTS = [
   { key: "recommendation", label: "Response" },
 ];
 
+const STORAGE_KEY = "complianceai_chat_history";
+
+function loadHistoryFromStorage() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistoryToStorage(history) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+  } catch {
+    console.log("Could not save chat history");
+  }
+}
+
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState({ online: false, docsIndexed: 0 });
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [filters, setFilters] = useState({ framework: "", nist_function: "" });
   const [sessionStats, setSessionStats] = useState({ queries: 0, tokens: 0, riskScores: [], times: [] });
+  const [chatHistory, setChatHistory] = useState(loadHistoryFromStorage);
+  const [activeChatId, setActiveChatId] = useState(null);
 
   useEffect(() => {
     checkHealth();
@@ -55,8 +78,37 @@ export default function App() {
     }
   };
 
+  const startNewChat = useCallback(() => {
+    if (messages.length > 0) {
+      const firstUserMsg = messages.find(m => m.type === "user");
+      const title = firstUserMsg
+        ? firstUserMsg.text.slice(0, 60) + (firstUserMsg.text.length > 60 ? "..." : "")
+        : "Untitled Chat";
+      const chatSession = {
+        id: Date.now(),
+        title,
+        messages,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      const updated = [chatSession, ...chatHistory];
+      setChatHistory(updated);
+      saveHistoryToStorage(updated);
+    }
+    setMessages([]);
+    setActiveChatId(null);
+  }, [messages, chatHistory]);
+
+  const loadChat = useCallback((chatId) => {
+    const chat = chatHistory.find(c => c.id === chatId);
+    if (chat) {
+      setMessages(chat.messages);
+      setActiveChatId(chatId);
+    }
+  }, [chatHistory]);
+
   const submitQuery = useCallback(async (question) => {
     if (isLoading || !question.trim()) return;
+    setActiveChatId(null);
     setIsLoading(true);
     setMessages(prev => [...prev, { type: "user", text: question }]);
     setMessages(prev => [...prev, { type: "loading", agents: AGENTS }]);
@@ -97,17 +149,28 @@ export default function App() {
             <span className={`status-dot ${apiStatus.online ? "online" : "offline"}`} />
             <span>{apiStatus.online ? `${apiStatus.docsIndexed} documents indexed` : "service offline"}</span>
           </div>
+          <button className="btn-analytics" onClick={() => setHistoryOpen(true)}>History</button>
           <button className="btn-analytics" onClick={() => setAnalyticsOpen(true)}>Analytics</button>
         </div>
       </header>
+
       <div className="app-body">
         <Sidebar onSelectQuery={submitQuery} filters={filters} onFilterChange={setFilters} sessionStats={sessionStats} />
         <div className="main-col">
           <ChatArea messages={messages} isLoading={isLoading} onQuickQuery={submitQuery} />
-          <InputBar onSubmit={submitQuery} isLoading={isLoading} />
+          <InputBar onSubmit={submitQuery} isLoading={isLoading} onNewChat={startNewChat} />
         </div>
       </div>
+
       {analyticsOpen && <AnalyticsModal onClose={() => setAnalyticsOpen(false)} />}
+      {historyOpen && (
+        <ChatHistoryModal
+          chatHistory={chatHistory}
+          onClose={() => setHistoryOpen(false)}
+          onLoadChat={loadChat}
+          onNewChat={startNewChat}
+        />
+      )}
     </div>
   );
 }

@@ -2,9 +2,7 @@
   flex-shrink: 0; border-top: 1px solid var(--border);
   padding: 14px 32px; background: var(--surface);
 }
-
-.input-wrapper { display: flex; gap: 8px; align-items: flex-end; max-width: 720px; }
-
+.input-wrapper { display: flex; gap: 8px; align-items: stretch; max-width: 720px; }
 .query-input {
   flex: 1; background: var(--surface2); border: 1px solid var(--border2);
   border-radius: var(--radius); padding: 10px 14px; color: var(--text);
@@ -18,7 +16,6 @@
   background: var(--surface3);
 }
 .query-input:disabled { opacity: 0.5; cursor: not-allowed; }
-
 .send-btn {
   height: 42px; padding: 0 18px;
   background: var(--accent-dim); border-radius: var(--radius);
@@ -28,13 +25,37 @@
 }
 .send-btn:hover:not(:disabled) { background: var(--accent); }
 .send-btn:disabled { background: var(--surface3); cursor: not-allowed; color: var(--muted2); }
-
 .spinner {
   width: 12px; height: 12px;
   border: 1.5px solid rgba(255,255,255,0.25); border-top-color: white;
   border-radius: 50%; animation: spin 0.7s linear infinite;
 }
-
 .input-hint { font-family: 'JetBrains Mono', monospace; font-size: 0.56rem; color: var(--muted2); margin-top: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-@keyframes spin { to{transform:rotate(360deg)} }
+.new-chat-inline-btn {
+  height: 42px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.new-chat-inline-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+.new-chat-inline-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
