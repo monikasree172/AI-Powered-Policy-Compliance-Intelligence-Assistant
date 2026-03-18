@@ -1,5 +1,5 @@
 """
-API Gateway — Port 8000
+API Gateway - Port 8000
 Orchestrates all 5 microservices via HTTP calls
 """
 
@@ -22,7 +22,7 @@ from shared.core.guardrails import validate_query, get_rejection_response
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [GATEWAY] %(levelname)s — %(message)s",
+    format="%(asctime)s [GATEWAY] %(levelname)s - %(message)s",
     handlers=[
         logging.FileHandler("logs/gateway.log"),
         logging.StreamHandler()
@@ -110,7 +110,7 @@ async def health():
                 services[name] = "offline"
 
     all_healthy = all(s == "healthy" for s in services.values())
-    logger.info(f"Services status: {services} — docs: {doc_count}")
+    logger.info(f"Services status: {services} - docs: {doc_count}")
 
     return {
         "status": "healthy" if all_healthy else "degraded",
@@ -127,19 +127,22 @@ async def compliance_query(request: ComplianceQueryRequest):
     start_time = time.time()
     question = request.question
 
-    # Run guardrails first � reject invalid/off-topic queries immediately
+    # Run guardrails first - reject invalid/off-topic queries immediately
     guard = validate_query(question)
     if not guard.is_valid:
         return get_rejection_response(guard.reason)
+
     filters = request.filters.model_dump(exclude_none=True) if request.filters else None
     agents_used = []
     token_usage = {"total_input": 0, "total_output": 0, "total": 0}
+    use_fallback = False
+    chunks = []
 
     logger.info(f"New query received: '{question[:80]}'")
 
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
 
-        # Step 1: Retrieval
+        # Step 1: Retrieval - always runs, no GPT-4o involved
         logger.info("Calling Retrieval Service (port 8001)...")
         try:
             ret_resp = await client.post(f"{RETRIEVAL_URL}/retrieve", json={
@@ -148,6 +151,7 @@ async def compliance_query(request: ComplianceQueryRequest):
             ret_resp.raise_for_status()
             ret = ret_resp.json()
             agents_used.append("retrieval")
+            chunks = ret["chunks"]
             logger.info(f"Retrieval: {ret['total_found']} chunks in {ret['response_time_ms']}ms")
         except Exception as e:
             logger.error(f"Retrieval service failed: {e}")
@@ -156,11 +160,10 @@ async def compliance_query(request: ComplianceQueryRequest):
         if ret["total_found"] == 0:
             return {"success": False, "error": "No policy documents ingested.", "question": question}
 
-        chunks = ret["chunks"]
-
-        # Step 2: Interpretation
-        logger.info("Calling Interpretation Service (port 8002)...")
+        # Steps 2-5: GPT-4o pipeline with fallback
         try:
+            # Step 2: Interpretation
+            logger.info("Calling Interpretation Service (port 8002)...")
             interp_resp = await client.post(f"{INTERPRETATION_URL}/interpret", json={
                 "question": question, "retrieved_chunks": chunks
             })
@@ -169,13 +172,9 @@ async def compliance_query(request: ComplianceQueryRequest):
             agents_used.append("interpretation")
             token_usage["total_input"] += interp["prompt_tokens"]
             token_usage["total_output"] += interp["completion_tokens"]
-        except Exception as e:
-            logger.error(f"Interpretation service failed: {e}")
-            raise HTTPException(status_code=503, detail=f"Interpretation service error: {str(e)}")
 
-        # Step 3: Compliance
-        logger.info("Calling Compliance Service (port 8003)...")
-        try:
+            # Step 3: Compliance
+            logger.info("Calling Compliance Service (port 8003)...")
             comp_resp = await client.post(f"{COMPLIANCE_URL}/check", json={
                 "question": question,
                 "interpretation": interp["interpretation"],
@@ -188,13 +187,9 @@ async def compliance_query(request: ComplianceQueryRequest):
             token_usage["total_input"] += comp["prompt_tokens"]
             token_usage["total_output"] += comp["completion_tokens"]
             logger.info(f"Compliance: {comp['status']} in {comp['response_time_ms']}ms")
-        except Exception as e:
-            logger.error(f"Compliance service failed: {e}")
-            raise HTTPException(status_code=503, detail=f"Compliance service error: {str(e)}")
 
-        # Step 4: Risk
-        logger.info("Calling Risk Service (port 8004)...")
-        try:
+            # Step 4: Risk
+            logger.info("Calling Risk Service (port 8004)...")
             risk_resp = await client.post(f"{RISK_URL}/assess", json={
                 "question": question,
                 "compliance_status": comp["status"],
@@ -207,13 +202,9 @@ async def compliance_query(request: ComplianceQueryRequest):
             token_usage["total_input"] += risk["prompt_tokens"]
             token_usage["total_output"] += risk["completion_tokens"]
             logger.info(f"Risk: {risk['risk_level']} ({risk['risk_score']:.2f}) in {risk['response_time_ms']}ms")
-        except Exception as e:
-            logger.error(f"Risk service failed: {e}")
-            raise HTTPException(status_code=503, detail=f"Risk service error: {str(e)}")
 
-        # Step 5: Recommendation
-        logger.info("Calling Recommendation Service (port 8005)...")
-        try:
+            # Step 5: Recommendation
+            logger.info("Calling Recommendation Service (port 8005)...")
             rec_resp = await client.post(f"{RECOMMENDATION_URL}/recommend", json={
                 "question": question,
                 "compliance_status": comp["status"],
@@ -229,15 +220,72 @@ async def compliance_query(request: ComplianceQueryRequest):
             token_usage["total_input"] += rec["prompt_tokens"]
             token_usage["total_output"] += rec["completion_tokens"]
             logger.info(f"Recommendation complete in {rec['response_time_ms']}ms")
-        except Exception as e:
-            logger.error(f"Recommendation service failed: {e}")
-            raise HTTPException(status_code=503, detail=f"Recommendation service error: {str(e)}")
 
+        except Exception as e:
+            logger.warning(f"GPT-4o pipeline failed, activating retrieval fallback: {e}")
+            use_fallback = True
+
+    # Build final response
     token_usage["total"] = token_usage["total_input"] + token_usage["total_output"]
     elapsed_ms = (time.time() - start_time) * 1000
     citations = _build_citations(chunks)
 
-    # Record to analytics
+    if use_fallback:
+        # Fallback response - retrieval only, no GPT-4o
+        logger.info("Returning fallback retrieval-only response")
+        policy_sections = "\n\n".join([
+            f"- {c.get('metadata', {}).get('source', 'Policy Document')} "
+            f"[{c.get('metadata', {}).get('subcategory', 'General')}]: "
+            f"{c['text'][:300]}..."
+            for c in chunks[:3]
+        ])
+
+        analytics.record_query(
+            question=question,
+            risk_level="UNKNOWN",
+            compliance_status="REQUIRES_REVIEW",
+            nist_functions_hit=ret.get("frameworks", []),
+            response_time_ms=elapsed_ms,
+            token_count=0
+        )
+
+        return {
+            "success": True,
+            "question": question,
+            "answer": (
+                "AI reasoning is temporarily unavailable. "
+                "Based on policy retrieval, here are the most relevant sections:\n\n"
+                f"{policy_sections}\n\n"
+                "Please consult these sections directly or contact your compliance team for guidance."
+            ),
+            "interpretation": "Retrieval-only mode - AI reasoning temporarily unavailable.",
+            "compliance_status": "REQUIRES_REVIEW",
+            "compliance_reasoning": "Manual review required - AI pipeline temporarily unavailable.",
+            "violated_policies": [],
+            "conflicts_detected": False,
+            "conflict_details": "",
+            "risk_level": "UNKNOWN",
+            "risk_score": 0.0,
+            "risk_factors": [],
+            "potential_consequences": [],
+            "urgency": "MANUAL_REVIEW",
+            "next_steps": [
+                "Review the retrieved policy sections above",
+                "Consult your compliance team for a definitive answer",
+                "Refer to the cited NIST policy sections directly"
+            ],
+            "escalation_required": False,
+            "escalation_path": "",
+            "compliant_alternative": "",
+            "citations": citations,
+            "agents_used": agents_used,
+            "token_usage": token_usage,
+            "response_time_ms": round(elapsed_ms, 1),
+            "frameworks": ret.get("frameworks", []),
+            "architecture": "microservices",
+        }
+
+    # Full pipeline response - normal path
     analytics.record_query(
         question=question,
         risk_level=risk["risk_level"],
@@ -247,7 +295,7 @@ async def compliance_query(request: ComplianceQueryRequest):
         token_count=token_usage["total"]
     )
 
-    logger.info(f"Query complete in {elapsed_ms:.1f}ms — status={comp['status']} risk={risk['risk_level']} tokens={token_usage['total']}")
+    logger.info(f"Query complete in {elapsed_ms:.1f}ms - status={comp['status']} risk={risk['risk_level']} tokens={token_usage['total']}")
 
     return {
         "success": True,
