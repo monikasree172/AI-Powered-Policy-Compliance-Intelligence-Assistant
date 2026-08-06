@@ -1,0 +1,61 @@
+.input-bar {
+  flex-shrink: 0; border-top: 1px solid var(--border);
+  padding: 14px 32px; background: var(--surface);
+}
+.input-wrapper { display: flex; gap: 8px; align-items: stretch; max-width: 720px; }
+.query-input {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: var(--radius); padding: 10px 14px; color: var(--text);
+  font-size: 0.84rem; resize: none; min-height: 42px; max-height: 120px;
+  line-height: 1.55; transition: border-color 0.15s, box-shadow 0.15s;
+}
+.query-input::placeholder { color: var(--muted2); }
+.query-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(34,197,94,0.1);
+  background: var(--surface3);
+}
+.query-input:disabled { opacity: 0.5; cursor: not-allowed; }
+.send-btn {
+  height: 42px; padding: 0 18px;
+  background: var(--accent-dim); border-radius: var(--radius);
+  color: white; display: flex; align-items: center; gap: 7px;
+  font-size: 0.8rem; font-weight: 600; transition: all 0.15s;
+  flex-shrink: 0; letter-spacing: 0.02em; white-space: nowrap;
+}
+.send-btn:hover:not(:disabled) { background: var(--accent); }
+.send-btn:disabled { background: var(--surface3); cursor: not-allowed; color: var(--muted2); }
+.spinner {
+  width: 12px; height: 12px;
+  border: 1.5px solid rgba(255,255,255,0.25); border-top-color: white;
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+.input-hint { font-family: 'JetBrains Mono', monospace; font-size: 0.56rem; color: var(--muted2); margin-top: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.new-chat-inline-btn {
+  height: 42px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.new-chat-inline-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+.new-chat-inline-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

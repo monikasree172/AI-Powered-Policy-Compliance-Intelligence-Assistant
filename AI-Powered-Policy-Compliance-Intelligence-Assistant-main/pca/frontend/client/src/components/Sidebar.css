@@ -1,0 +1,68 @@
+.sidebar {
+  width: 252px; flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+.sidebar-inner { flex: 1; overflow-y: auto; }
+
+.sidebar-group { border-bottom: 1px solid var(--border); padding: 14px 0; }
+
+.sidebar-group-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 16px 8px;
+}
+
+.sidebar-icon { color: var(--muted2); flex-shrink: 0; }
+
+.sidebar-group-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem; text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--muted2); font-weight: 500;
+}
+
+.sample-list { padding: 0 8px; display: flex; flex-direction: column; gap: 1px; }
+
+.sample-btn {
+  width: 100%; text-align: left; padding: 7px 10px;
+  background: transparent; border-radius: var(--radius-sm);
+  font-size: 0.76rem; color: var(--muted); line-height: 1.5;
+  transition: all 0.12s; border-left: 2px solid transparent;
+}
+.sample-btn:hover {
+  background: var(--surface2); color: var(--text);
+  border-left-color: var(--accent);
+}
+
+.filter-group { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.filter-row label {
+  font-size: 0.66rem; color: var(--muted2);
+  display: block; margin-bottom: 4px;
+  font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
+}
+
+.filter-row select {
+  width: 100%; padding: 6px 10px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); color: var(--text); font-size: 0.77rem;
+  transition: border-color 0.12s; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+}
+.filter-row select:focus { border-color: var(--accent); }
+.filter-row select option { background: var(--surface2); }
+
+.stats-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 1px; background: var(--border); border-top: 1px solid var(--border);
+}
+
+.stat-card { background: var(--surface2); padding: 12px 10px; text-align: center; }
+
+.stat-val { font-size: 1.25rem; color: var(--accent); line-height: 1; font-weight: 700; }
+
+.stat-lbl {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.55rem;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted2); margin-top: 3px;
+}
