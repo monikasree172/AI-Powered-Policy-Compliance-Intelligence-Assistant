@@ -46,37 +46,47 @@ export default function App() {
   const [activeChatId, setActiveChatId] = useState(null);
 
   useEffect(() => {
-    checkHealth();
-    loadAnalytics();
+    let ignore = false;
+
+    const runChecks = async () => {
+      try {
+        const { data } = await axios.get("/api/v1/health", { timeout: 4000 });
+        if (!ignore) {
+          setApiStatus({ online: data.status === "healthy", docsIndexed: data.documents_indexed || 0 });
+        }
+      } catch {
+        if (!ignore) {
+          setApiStatus({ online: false, docsIndexed: 0 });
+        }
+      }
+
+      try {
+        const { data } = await axios.get("/api/v1/analytics", { timeout: 4000 });
+        if (!ignore) {
+          setSessionStats({
+            queries: data.total_queries || 0,
+            tokens: data.recent_queries?.reduce((a, q) => a + (q.tokens || 0), 0) || 0,
+            riskScores: data.recent_queries?.map(q =>
+              q.risk_level === "CRITICAL" ? 1.0 :
+              q.risk_level === "HIGH" ? 0.75 :
+              q.risk_level === "MEDIUM" ? 0.5 :
+              q.risk_level === "LOW" ? 0.25 : 0.1
+            ) || [],
+            times: data.recent_queries?.map(q => q.response_time_ms || 0) || [],
+          });
+        }
+      } catch {
+        if (!ignore) console.log("Analytics not available");
+      }
+    };
+
+       runChecks();
+    const interval = setInterval(runChecks, 10000);
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+    };
   }, []);
-
-  const checkHealth = async () => {
-    try {
-      const { data } = await axios.get("/api/v1/health", { timeout: 4000 });
-      setApiStatus({ online: data.status === "healthy", docsIndexed: data.documents_indexed || 0 });
-    } catch {
-      setApiStatus({ online: false, docsIndexed: 0 });
-    }
-  };
-
-  const loadAnalytics = async () => {
-    try {
-      const { data } = await axios.get("/api/v1/analytics", { timeout: 4000 });
-      setSessionStats({
-        queries: data.total_queries || 0,
-        tokens: data.recent_queries?.reduce((a, q) => a + (q.tokens || 0), 0) || 0,
-        riskScores: data.recent_queries?.map(q =>
-          q.risk_level === "CRITICAL" ? 1.0 :
-          q.risk_level === "HIGH" ? 0.75 :
-          q.risk_level === "MEDIUM" ? 0.5 :
-          q.risk_level === "LOW" ? 0.25 : 0.1
-        ) || [],
-        times: data.recent_queries?.map(q => q.response_time_ms || 0) || [],
-      });
-    } catch {
-      console.log("Analytics not available");
-    }
-  };
 
   const startNewChat = useCallback(() => {
     if (messages.length > 0) {
